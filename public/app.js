@@ -1,4 +1,3 @@
-const socket = io();
 const introScreen = document.getElementById('intro-screen');
 const chatInterface = document.getElementById('chat-interface');
 const startButton = document.getElementById('start-button');
@@ -25,8 +24,7 @@ const messageHistory = {
 startButton.addEventListener('click', () => {
     introScreen.classList.add('hidden');
     chatInterface.classList.remove('hidden');
-// Ensure proper layout is maintained
-window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new Event('resize'));
     displayMessageHistory();
 });
 
@@ -96,14 +94,11 @@ function addMessage(content, type) {
 }
 
 function processContent(content) {
-    // Extract decision
     const decisionMatch = content.match(/<decide>(.*?)<\/decide>/);
     const decision = decisionMatch ? decisionMatch[1] : null;
     
-    // Extract thinking steps (both numbered and unnumbered)
     const thinkingSteps = [];
     
-    // Process numbered thinking tags (<think1>, <think2>, etc.)
     const numberedThinkRegex = /<think(\d+)>(.*?)<\/think\d+>/g;
     let numberedMatch;
     while ((numberedMatch = numberedThinkRegex.exec(content)) !== null) {
@@ -113,17 +108,14 @@ function processContent(content) {
         });
     }
     
-    // Process regular thinking tags (<think>)
     const regularThinkRegex = /<think>(.*?)<\/think>/g;
     let regularMatch;
-    let regularIndex = thinkingSteps.length + 1;
     while ((regularMatch = regularThinkRegex.exec(content)) !== null) {
         thinkingSteps.push({
             content: regularMatch[1]
         });
     }
     
-    // Sort thinking steps by number if they exist
     thinkingSteps.sort((a, b) => {
         if (a.number && b.number) return a.number - b.number;
         if (a.number) return -1;
@@ -131,7 +123,6 @@ function processContent(content) {
         return 0;
     });
     
-    // Get final answer (remove all thinking and decision tags)
     let finalAnswer = content
         .replace(/<decide>.*?<\/decide>/g, '')
         .replace(/<think\d*>.*?<\/think\d*>/g, '')
@@ -141,35 +132,40 @@ function processContent(content) {
     return { decision, thinkingSteps, finalAnswer };
 }
 
-function sendMessage() {
+async function sendMessage() {
     const message = messageInput.value.trim();
     if (message) {
         messageHistory.addMessage(message, 'user');
         addMessage(message, 'user');
         messageInput.value = '';
-        socket.emit('sendMessage', message);
+        
+        try {
+            const response = await fetch('/.netlify/functions/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message })
+            });
+            
+            const data = await response.json();
+            handleMessage({ type: 'ai', content: data.choices[0].message.content });
+        } catch (error) {
+            console.error('Error:', error);
+            handleError('Failed to get AI response');
+        }
     }
 }
 
-sendButton.addEventListener('click', sendMessage);
-
-messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        sendMessage();
-    }
-});
-
-socket.on('message', (data) => {
+function handleMessage(data) {
     if (data.type === 'ai') {
         const { decision, thinkingSteps, finalAnswer } = processContent(data.content);
         
-        // Display decision if present
         if (decision) {
             messageHistory.addMessage('', 'decision', { decision });
             createDecisionMessage(decision);
         }
         
-        // Display thinking steps if present
         if (thinkingSteps.length > 0) {
             messageHistory.addMessage('', 'ai', { 
                 isThinking: true, 
@@ -189,7 +185,6 @@ socket.on('message', (data) => {
             });
         }
         
-        // Display final answer
         if (finalAnswer) {
             messageHistory.addMessage(finalAnswer, 'ai');
             addMessage(finalAnswer, 'ai');
@@ -197,9 +192,23 @@ socket.on('message', (data) => {
         
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
+}
+
+function handleError(error) {
+    console.error('Error:', error);
+    const errorMessage = 'Sorry, there was an error processing your message.';
+    messageHistory.addMessage(errorMessage, 'error');
+    addMessage(errorMessage, 'error');
+}
+
+sendButton.addEventListener('click', sendMessage);
+
+messageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        sendMessage();
+    }
 });
 
-// Create header and clear button
 const chatHeader = document.createElement('div');
 chatHeader.className = 'chat-header';
 
@@ -211,13 +220,4 @@ clearButton.onclick = () => {
 };
 
 chatHeader.appendChild(clearButton);
-
-// Insert header at the top of chat interface
 chatInterface.insertBefore(chatHeader, chatInterface.firstChild);
-
-socket.on('error', (error) => {
-    console.error('Error:', error);
-    const errorMessage = 'Sorry, there was an error processing your message.';
-    messageHistory.addMessage(errorMessage, 'error');
-    addMessage(errorMessage, 'error');
-});

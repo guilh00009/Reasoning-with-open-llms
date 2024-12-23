@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A messaging app with reasoning capabilities",
   "scripts": {
-    "build": "mkdir -p public && cp src/* public/",
+    "build": "echo 'No build required'",
     "dev": "netlify dev",
     "start": "node server.js"
   },

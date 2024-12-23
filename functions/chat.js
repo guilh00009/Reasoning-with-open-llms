@@ -6,7 +6,7 @@ exports.handler = async (event) => {
   }
 
   const { message } = JSON.parse(event.body);
-  const OPENPIPE_API_KEY = process.env.OPENPIPE_API_KEY;
+  const OPENPIPE_API_KEY = "opk_5fcca158032f16b9caeeb0729d4fa0dd85b7aaf6ac";
 
   try {
     const response = await axios.post('https://app.openpipe.ai/api/v1/chat/completions', {
